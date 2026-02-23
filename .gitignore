@@ -1,0 +1,9 @@
+# Ignore the CMake build factory
+build/
+
+# Ignore massive AI weight files
+*.bin
+*.gguf
+
+# Ignore Mac system files
+.DS_Store

@@ -1,0 +1,26 @@
+#pragma once
+
+#include <iostream>
+
+struct Tensor
+{
+    float* data;
+    int rows;
+    int cols;
+
+    Tensor(float* d, int r, int c) {
+        data = d;
+        rows = r;
+        cols = c;
+    }
+
+    int size() {
+        return (rows * cols);
+    }
+};
+
+void print_tensor_shape(const char* name, Tensor& t) {
+    std::cout << "📊 Tensor " << name << " | Shape: ["
+              << t.rows << " x " << t.cols << "] | Total Elements: "
+              << t.size() << "\n";
+}
