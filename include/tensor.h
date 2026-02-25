@@ -14,7 +14,7 @@ struct Tensor
         cols = c;
     }
 
-    int size() {
+    int size() const {
         return (rows * cols);
     }
 };

@@ -89,3 +89,17 @@ inline void prepare_qkv(Tensor& x, Tensor& q, Tensor& k, Tensor& v , Tensor& Wq,
     apply_rope(q, pos, head_dim);
     apply_rope(k, pos, head_dim);
 }
+
+inline void calculate_attention_scores(const Tensor& q, const float* k_cache, float* scores, int current_pos, int head_dim) {
+    float scale = 1.0f / std::sqrt((float)head_dim);
+
+    for (int i = 0; i < current_pos; i++)
+    {
+        float sum = 0.0f;
+        for (int j = 0; j < q.size(); j++)
+        {
+            sum += k_cache[(i * head_dim) + j] * q.data[j];
+        }
+        scores[i] = sum * scale;
+    }
+}
