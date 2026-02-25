@@ -6,6 +6,7 @@
 #include "utils.h"
 
 // Forward pass matrix multiplication - GEMV
+// y = W * x
 inline void matmul_forward(const Tensor &W, const Tensor &x, Tensor &y)
 {
     // check dimensions

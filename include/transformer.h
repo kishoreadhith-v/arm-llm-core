@@ -3,6 +3,7 @@
 #include <cmath>
 #include "tensor.h"
 #include "utils.h"
+#include "math_engine.h"
 
 inline void rmsnorm(Tensor &x, const Tensor &weight, float eps = 1e-5f) {
     // check dimensions
@@ -52,7 +53,39 @@ inline void apply_rope(Tensor& x, int pos, int head_dim) {
             x.data[head_offset + i] = new_x0;
             x.data[head_offset + i + 1] = new_x1;
         }
-        
+    }
+}
+
+inline void softmax(Tensor& x) {
+    int size = x.size();
+
+    float max_val = x.data[0];
+    for (int i = 0; i < size; i++)
+    {
+        if (x.data[i] > max_val)
+        {
+            max_val = x.data[i];
+        }
+    }
+
+    float sum = 0.0f;
+    for (int i = 0; i < size; i++)
+    {
+        x.data[i] = std::exp(x.data[i] - max_val);
+        sum += x.data[i];
     }
     
+    for (int i = 0; i < size; i++)
+    {
+        x.data[i] = x.data[i] / sum;
+    }
+}
+
+inline void prepare_qkv(Tensor& x, Tensor& q, Tensor& k, Tensor& v , Tensor& Wq, Tensor& Wk, Tensor& Wv, int pos, int head_dim) {
+    matmul_forward(Wq, x, q);
+    matmul_forward(Wk, x, k);
+    matmul_forward(Wv, x, v);
+
+    apply_rope(q, pos, head_dim);
+    apply_rope(k, pos, head_dim);
 }
