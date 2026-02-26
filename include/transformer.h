@@ -4,6 +4,7 @@
 #include "tensor.h"
 #include "utils.h"
 #include "math_engine.h"
+#include "kvcache.h"
 
 inline void rmsnorm(Tensor &x, const Tensor &weight, float eps = 1e-5f) {
     // check dimensions
@@ -103,3 +104,75 @@ inline void calculate_attention_scores(const Tensor& q, const float* k_cache, fl
         scores[i] = sum * scale;
     }
 }
+
+// multiply attention percentagesagainst values to extract meaning
+inline void compute_attention_output(const float* scores, const float* v_cache, Tensor& out, int current_pos, int head_dim) {
+    for (int i = 0; i < out.size(); i++)
+    {
+        out.data[i] = 0.0f;
+    }
+
+    for (int i = 0; i < current_pos; i++)
+    {
+        float prob = scores[i];
+
+        for (int j = 0; j < head_dim; j++)
+        {
+            out.data[j] += v_cache[(i * head_dim) + j] * prob;
+        }        
+    }
+}
+
+struct AttentionBlock
+{
+    int num_heads;
+    int head_dim;
+
+    // weights for this layer
+    Tensor Wq, Wk, Wv, Wo;
+
+    // forward pass
+    void forward(Tensor& x, KVCache& cache, int pos) {
+        float *q_data = new float[x.size()]();
+        float *k_data = new float[x.size()]();
+        float *v_data = new float[x.size()]();
+        float *meaning_data = new float[x.size()]();
+        float *output_data = new float[x.size()]();
+
+        Tensor q(q_data, x.size(), 1);
+        Tensor k(k_data, x.size(), 1);
+        Tensor v(v_data, x.size(), 1);
+        Tensor final_meaning(meaning_data, x.size(), 1);
+        Tensor final_output(output_data, x.size(), 1);
+
+        prepare_qkv(x, q, k, v, Wq, Wk, Wv, pos, head_dim);
+
+        cache.save_kv(k, v);
+
+        for (int  h = 0; h < num_heads; h++)
+        {
+            int offset = h * head_dim;
+
+            Tensor head_q(q.data + offset, head_dim, 1);
+            Tensor head_out(final_meaning.data + offset, head_dim, 1);
+
+            float* scores = new float[pos + 1];
+
+            calculate_attention_scores(head_q, cache.k_cache, scores, pos + 1, head_dim);
+            Tensor scores_tensor(scores, pos + 1, 1);
+            softmax(scores_tensor);
+            compute_attention_output(scores, cache.v_cache, head_out, pos + 1, head_dim);
+
+            delete[] scores;
+        }
+        
+        matmul_forward(final_output, final_meaning, Wo);
+        std::memcpy(x.data, final_output.data, x.size() * sizeof(float));
+
+        delete[] q_data;
+        delete[] k_data;
+        delete[] v_data;
+        delete[] meaning_data;
+        delete[] output_data;
+    }
+};
