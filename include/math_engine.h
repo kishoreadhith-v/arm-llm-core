@@ -7,7 +7,7 @@
 
 // Forward pass matrix multiplication - GEMV
 // y = W * x
-inline void matmul_forward(const Tensor &W, const Tensor &x, Tensor &y)
+inline void matmul_forward(Tensor &y, const Tensor &x, const Tensor &W)
 {
     // check dimensions
     CHECK(W.cols == x.rows, "Matrix - Vector shape mismatch - W.cols must be equal to x.rows");
