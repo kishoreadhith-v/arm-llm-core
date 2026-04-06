@@ -9,10 +9,21 @@
 // y = W * x
 inline void matmul_forward(Tensor &y, const Tensor &x, const Tensor &W)
 {
+
+    if (W.cols != x.rows)
+    {
+        std::cout << "\n💥 DIMENSION COLLISION DETECTED 💥\n";
+        std::cout << "Weight Matrix (W): " << W.rows << " rows, " << W.cols << " cols\n";
+        std::cout << "Input Vector (x): " << x.rows << " rows, " << x.cols << " cols\n";
+        std::cout << "Output Vector (y): " << y.rows << " rows, " << y.cols << " cols\n";
+    }
+
     // check dimensions
     CHECK(W.cols == x.rows, "Matrix - Vector shape mismatch - W.cols must be equal to x.rows");
     CHECK(W.rows == y.rows, "Matrix - Output shape mismatch - W.cols must be equal to y.rows");
 
+    std::memset(y.data, 0, y.rows * y.cols * sizeof(float));
+    
     for (int i = 0; i < W.rows; i++)
     {
         float32x4_t vec_sum = vdupq_n_f32(0.0f);
@@ -22,7 +33,7 @@ inline void matmul_forward(Tensor &y, const Tensor &x, const Tensor &W)
             int index = (i * W.cols) + j;
 
             float32x4_t w_vec = vld1q_f32(&W.data[index]);
-            float32x4_t x_vec = vld1q_f32(&x.data[i]);
+            float32x4_t x_vec = vld1q_f32(&x.data[j]);
 
             vec_sum = vmlaq_f32(vec_sum, w_vec, x_vec);
         }

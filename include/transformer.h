@@ -105,7 +105,7 @@ inline void prepare_qkv(Tensor &x, Tensor &q, Tensor &k, Tensor &v, Tensor &Wq, 
     apply_rope(k, pos, head_dim);
 }
 
-inline void calculate_attention_scores(const Tensor &q, const float *k_cache, float *scores, int current_pos, int head_dim)
+inline void calculate_attention_scores(const Tensor &q, const float *k_cache, float *scores, int current_pos, int head_dim, int kv_dim, int head_offset)
 {
     float scale = 1.0f / std::sqrt((float)head_dim);
 
@@ -114,14 +114,19 @@ inline void calculate_attention_scores(const Tensor &q, const float *k_cache, fl
         float sum = 0.0f;
         for (int j = 0; j < q.size(); j++)
         {
-            sum += k_cache[(i * head_dim) + j] * q.data[j];
+            sum += k_cache[(i * kv_dim) + head_offset + j] * q.data[j];
         }
         scores[i] = sum * scale;
+
+        if (std::isnan(scores[i]))
+            scores[i] = -10000.0f;
+        if (scores[i] < -10000.0f)
+            scores[i] = -10000.0f;
     }
 }
 
 // multiply attention percentagesagainst values to extract meaning
-inline void compute_attention_output(const float *scores, const float *v_cache, Tensor &out, int current_pos, int head_dim)
+inline void compute_attention_output(const float *scores, const float *v_cache, Tensor &out, int current_pos, int head_dim, int kv_dim, int head_offset)
 {
     for (int i = 0; i < out.size(); i++)
     {
@@ -134,7 +139,7 @@ inline void compute_attention_output(const float *scores, const float *v_cache, 
 
         for (int j = 0; j < head_dim; j++)
         {
-            out.data[j] += v_cache[(i * head_dim) + j] * prob;
+            out.data[j] += v_cache[(i * kv_dim) + head_offset + j] * prob;
         }
     }
 }
@@ -144,11 +149,13 @@ struct AttentionBlock
     int num_heads;
     int head_dim;
 
+    KVCache cache;
+
     // weights for this layer
     Tensor Wq, Wk, Wv, Wo;
 
     // forward pass
-    void forward(Tensor &x, KVCache &cache, int pos)
+    void forward(Tensor &x, int pos)
     {
         float *q_data = new float[x.size()]();
         float *k_data = new float[x.size()]();
@@ -164,7 +171,9 @@ struct AttentionBlock
 
         prepare_qkv(x, q, k, v, Wq, Wk, Wv, pos, head_dim);
 
-        cache.save_kv(k, v);
+        cache.save_kv(k, v, pos);
+
+        int kv_dim = num_heads * head_dim;
 
         for (int h = 0; h < num_heads; h++)
         {
@@ -175,15 +184,17 @@ struct AttentionBlock
 
             float *scores = new float[pos + 1];
 
-            calculate_attention_scores(head_q, cache.k_cache, scores, pos + 1, head_dim);
+            calculate_attention_scores(head_q, cache.k_cache, scores, pos + 1, head_dim, kv_dim, offset);
             Tensor scores_tensor(scores, pos + 1, 1);
             softmax(scores_tensor);
-            compute_attention_output(scores, cache.v_cache, head_out, pos + 1, head_dim);
+            compute_attention_output(scores, cache.v_cache, head_out, pos + 1, head_dim, kv_dim, offset);
 
             delete[] scores;
         }
 
-        matmul_forward(Wo, final_meaning, final_output);
+        matmul_forward(final_output, final_meaning, Wo);
+        std::memcpy(x.data, final_output.data, x.size() * sizeof(float));
+
         std::memcpy(x.data, final_output.data, x.size() * sizeof(float));
 
         delete[] q_data;
@@ -233,3 +244,155 @@ struct FeedForwardBlock
     }
 };
 
+struct TransformerLayer
+{
+    AttentionBlock attention;
+    FeedForwardBlock ffn;
+
+    Tensor attention_norm_weight;
+    Tensor ffn_norm_weight;
+
+    void forward(Tensor& x, int pos) {
+        // Part 1 - attention
+
+        // save a copy of the data
+        float* h_data = new float[x.size()]();
+        std::memcpy(h_data, x.data, x.size() * sizeof(float));
+        Tensor h(h_data, x.size(), 1);
+
+        // prenorm and multihead attention
+        rmsnorm(x, attention_norm_weight);
+        attention.forward(x, pos);
+
+        // residual connection: x + attention(rmsnorm(x))
+        for (int i = 0; i < x.size(); i++)
+        {
+            x.data[i] += h.data[i];
+        }
+        
+        // Part 2 - feed forward
+
+        std::memcpy(h_data, x.data, x.size() * sizeof(float));
+
+        rmsnorm(x, ffn_norm_weight);
+        ffn.forward(x);
+
+        // residual connection: x + ffn(rmsnorm(x))
+        for (int i = 0; i < x.size(); i++)
+        {
+            x.data[i] += h.data[i];
+        }
+
+        delete[] h_data;
+    }
+};
+
+struct LLaMa
+{
+    int num_layers;
+    int vocab_size;
+    int dim;
+
+    Tensor tok_embeddings;      // token ids -> vectors lookup
+    TransformerLayer* layers;   // array of all layers
+    Tensor final_norm_weight;   // final rmsnorm weight
+    Tensor output_weight;       // weight for classifier(vectors -> token)
+
+    void load_weights(float* ptr) {
+        tok_embeddings = Tensor(ptr, vocab_size, dim);
+        ptr += (vocab_size * dim);
+
+        // 2. Attention Norms (ALL LAYERS AT ONCE)
+        for (int i = 0; i < num_layers; i++)
+        {
+            layers[i].attention_norm_weight = Tensor(ptr, dim, 1);
+            ptr += dim;
+        }
+
+        // 3. Wq (ALL LAYERS)
+        for (int i = 0; i < num_layers; i++)
+        {
+            layers[i].attention.Wq = Tensor(ptr, dim, dim);
+            ptr += (dim * dim);
+        }
+
+        // 4. Wk (ALL LAYERS)
+        for (int i = 0; i < num_layers; i++)
+        {
+            layers[i].attention.Wk = Tensor(ptr, dim, dim);
+            ptr += (dim * dim);
+        }
+
+        // 5. Wv (ALL LAYERS)
+        for (int i = 0; i < num_layers; i++)
+        {
+            layers[i].attention.Wv = Tensor(ptr, dim, dim);
+            ptr += (dim * dim);
+        }
+
+        // 6. Wo (ALL LAYERS)
+        for (int i = 0; i < num_layers; i++)
+        {
+            layers[i].attention.Wo = Tensor(ptr, dim, dim);
+            ptr += (dim * dim);
+        }
+
+        // 7. FFN Norms (ALL LAYERS)
+        for (int i = 0; i < num_layers; i++)
+        {
+            layers[i].ffn_norm_weight = Tensor(ptr, dim, 1);
+            ptr += dim;
+        }
+
+        // 8. FFN Gate (w1) (ALL LAYERS)
+        for (int i = 0; i < num_layers; i++)
+        {
+            layers[i].ffn.W_gate = Tensor(ptr, layers[i].ffn.hidden_dim, dim);
+            ptr += (dim * layers[i].ffn.hidden_dim);
+        }
+
+        // 9. FFN Down (w2) (ALL LAYERS)
+        for (int i = 0; i < num_layers; i++)
+        {
+            layers[i].ffn.W_down = Tensor(ptr, dim, layers[i].ffn.hidden_dim);
+            ptr += (layers[i].ffn.hidden_dim * dim);
+        }
+
+        // 10. FFN Up (w3) (ALL LAYERS)
+        for (int i = 0; i < num_layers; i++)
+        {
+            layers[i].ffn.W_up = Tensor(ptr, layers[i].ffn.hidden_dim, dim);
+            ptr += (dim * layers[i].ffn.hidden_dim);
+        }
+
+        // 11. Final Norm
+        final_norm_weight = Tensor(ptr, dim, 1);
+        ptr += dim;
+
+        // 12. Output Classifier (Weight Tying!)
+        output_weight = tok_embeddings;
+    }
+
+    // Master forward pass
+    // token_id -> logits
+    void forward(int token_id, int pos, Tensor& logits) {
+        // embedding layer
+        float* x_data = new float[dim]();
+        std::memcpy(x_data, tok_embeddings.data + (token_id * dim), dim * sizeof(float));
+        Tensor x(x_data, dim, 1);
+
+        // layer stack
+        for (int i = 0; i < num_layers; i++)
+        {
+            layers[i].forward(x, pos);
+        }
+    
+        // final norm
+        rmsnorm(x, final_norm_weight);
+
+        // classification (logits)
+        matmul_forward(logits, x, output_weight);
+
+        delete[] x_data;
+    }
+};

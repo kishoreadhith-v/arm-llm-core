@@ -8,6 +8,8 @@ struct Tensor
     int rows;
     int cols;
 
+    Tensor() : data(nullptr), rows(0), cols(0) {}
+
     Tensor(float* d, int r, int c) {
         data = d;
         rows = r;
