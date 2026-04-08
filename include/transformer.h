@@ -370,7 +370,7 @@ struct LLaMa
         ptr += dim;
 
         // 12. Output Classifier (Weight Tying!)
-        output_weight = tok_embeddings;
+        output_weight = Tensor(ptr, vocab_size, dim);
     }
 
     // Master forward pass

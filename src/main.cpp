@@ -23,7 +23,8 @@ int sample(Tensor &logits, float temperature, int vocab_size)
     float max_val = logits.data[0];
     for (int i = 0; i < vocab_size; i++)
     {
-        if (logits.data[i] > max_val) {
+        if (logits.data[i] > max_val)
+        {
             max_val = logits.data[i];
             max_index = i;
         }
@@ -63,20 +64,21 @@ int argmax(const Tensor &logits, int vocab_size)
             max_index = i;
         }
     }
-    
+
     return max_index;
 }
 
-int main(){
+int main()
+{
     std::cout << "[Start] Arm-LLM-Core...\n";
 
-    int dim = 288;
-    int hidden_dim = 768;
-    int num_layers = 6;
-    int num_heads = 6;
+    int dim = 2048;
+    int hidden_dim = 5632;
+    int num_layers = 22;
+    int num_heads = 32;
+    int head_dim = dim / num_heads; // MUST BE 64
     int vocab_size = 32000;
-    int max_seq_len = 256;
-    int EOS_TOKEN = 2;
+    int max_seq_len = 1024;
 
     LLaMa model;
     model.num_layers = num_layers;
@@ -87,15 +89,15 @@ int main(){
     for (int i = 0; i < num_layers; i++)
     {
         model.layers[i].attention.num_heads = num_heads;
-        model.layers[i].attention.head_dim = dim / num_heads;
+        model.layers[i].attention.head_dim = head_dim;
         model.layers[i].ffn.hidden_dim = hidden_dim;
 
-        model.layers[i].attention.cache.init(max_seq_len, dim);
+        model.layers[i].attention.cache.init(max_seq_len, num_heads * head_dim);
     }
 
-    ModelLoader loader("../stories15M.bin");
+    ModelLoader loader("../tinyllama_1B.bin");
     // Skip the 256-byte header/ metadata
-    float *weights_ptr = loader.get_data() + (256 / sizeof(float));
+    float *weights_ptr = loader.get_data();
     model.load_weights(weights_ptr);
     std::cout << "✅ Model routed safely." << std::endl;
 
@@ -106,13 +108,30 @@ int main(){
 
     std::srand(std::time(nullptr));
 
-    float temperature = 0.6f; // Standard for TinyStories
-    int next_token = 1; 
+    std::vector<int> prompt_tokens = {1, 529, 29989, 5205, 29989, 29958, 13, 3492, 526, 263, 8444, 14137, 319, 29902, 29889, 2, 13, 29966, 29989, 1792, 29989, 29958, 13, 6113, 263, 2560, 4544, 1813, 5934, 15043, 2787, 29901, 2, 13, 29966, 29989, 465, 22137, 29989, 29958, 13, 28956, 1420, 13, 29966, 29991, 21300, 3472, 29958, 13, 29966, 1420, 29958, 13, 29966, 2813, 29958, 13};
     int pos = 0;
 
-    std::cout << "Generating text: \n";
+    std::cout << "Prompt: ```html\n<!DOCTYPE html>\n<html>\n<head>\n";
 
-    while (pos < 256)
+    // 1. Ingest the prompt to build the KV Cache Context
+    // We stop 1 token early so we can use the final token to kick off generation
+    std::cout << "Ingesting prompt...\n";
+    for (size_t i = 0; i < prompt_tokens.size() - 1; i++)
+    {
+        std::cout << "\rProcessing token " << (i + 1) << " of " << (prompt_tokens.size() - 1) << std::flush;
+        std::memset(logits.data, 0, vocab_size * sizeof(float));
+        model.forward(prompt_tokens[i], pos, logits);
+        pos++;
+    }
+    std::cout << "\n";
+
+    int next_token = prompt_tokens.back(); // Token 3694 (" named")
+    float temperature = 0.2f;              // Back to 0.8! With a prompt, the model is confident enough for creativity.
+    int EOS_TOKEN = 2;
+
+    std::cout << "\nGenerating HTML:\n\n";
+
+    while (pos < 800)
     {
         std::memset(logits.data, 0, vocab_size * sizeof(float));
 
@@ -129,17 +148,17 @@ int main(){
 
         if (next_token == EOS_TOKEN)
         {
-            std::cout << "\n[Model finished generating naturally]" << std::endl;
+            std::cout << "\n[App Generation Complete]" << std::endl;
             break;
         }
 
         tokenizer.print_word(next_token);
-        // tokenizer.print_word(30999);
         std::cout << std::flush;
         pos += 1;
     }
-    
-    std::cout << "\n" << "Generation complete: \n";
+
+    std::cout << "\n"
+              << "Generation complete: \n";
 
     delete[] logits.data;
     delete[] model.layers;

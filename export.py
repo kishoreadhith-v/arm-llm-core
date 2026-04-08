@@ -1,51 +1,95 @@
+import sys
 import torch
+from transformers import AutoModelForCausalLM
 import numpy as np
-import struct
 
-print("🚀 Booting PyTorch Exporter...")
+if len(sys.argv) != 3:
+    print("Usage: python export.py <model_directory> <output_file.bin>")
+    sys.exit(1)
 
-# Engine Configuration (Must match your main.cpp exactly)
-dim = 288
-hidden_dim = 768
-num_layers = 6
-vocab_size = 32000
+model_dir = sys.argv[1]
+output_file = sys.argv[2]
 
-# Helper function to write a PyTorch tensor to raw bytes
+# TinyLlama 1.1B Configuration
+num_heads = 32
+num_kv_heads = 4
+head_dim = 2048 // 32
+num_layers = 22
+
 def serialize(file, tensor):
-    # Convert to float32, flatten to 1D, and write to disk
     d = tensor.detach().cpu().to(torch.float32).numpy()
     file.write(d.tobytes())
 
-print("🧠 Generating randomized PyTorch weights...")
-# We use torch.randn to simulate a real, untrained neural network
-with open("model.bin", "wb") as f:
+# --- NEW: The RoPE Translation Math ---
+def permute_for_rope(w, n_heads):
+    # Untangles Hugging Face's split-half RoPE into C++ adjacent-pair RoPE
+    dim_out, dim_in = w.shape
+    hd = dim_out // n_heads
+    w = w.view(n_heads, 2, hd // 2, dim_in)
+    w = w.transpose(1, 2).reshape(dim_out, dim_in)
+    return w
+# --------------------------------------
+
+def repeat_kv(w):
+    n_rep = num_heads // num_kv_heads
+    w = w.view(num_kv_heads, head_dim, -1)
+    w = w.unsqueeze(1).expand(-1, n_rep, -1, -1).reshape(num_heads * head_dim, -1)
+    return w
+
+print(f"🧠 Loading weights from {model_dir} into RAM...")
+model = AutoModelForCausalLM.from_pretrained(model_dir, torch_dtype=torch.float16)
+state_dict = model.state_dict()
+
+print(f"📦 Serializing corrected weights to {output_file}...")
+with open(output_file, "wb") as f:
     
     # 1. Embeddings
-    serialize(f, torch.randn(vocab_size, dim))
+    serialize(f, state_dict["model.embed_tokens.weight"])
     
-    # 2. Layer Stack
+    # 2. Attention Norms
     for i in range(num_layers):
-        # Attention Norm
-        serialize(f, torch.ones(dim)) # Norm weights usually start at 1.0
+        serialize(f, state_dict[f"model.layers.{i}.input_layernorm.weight"])
         
-        # Q, K, V, O
-        serialize(f, torch.randn(dim, dim))
-        serialize(f, torch.randn(dim, dim))
-        serialize(f, torch.randn(dim, dim))
-        serialize(f, torch.randn(dim, dim))
+    # 3. Wq (Apply RoPE Permute!)
+    for i in range(num_layers):
+        wq = state_dict[f"model.layers.{i}.self_attn.q_proj.weight"]
+        serialize(f, permute_for_rope(wq, num_heads))
         
-        # FFN Norm
-        serialize(f, torch.ones(dim))
+    # 4. Wk (Apply RoPE Permute, THEN repeat for GQA!)
+    for i in range(num_layers):
+        wk = state_dict[f"model.layers.{i}.self_attn.k_proj.weight"]
+        wk = permute_for_rope(wk, num_kv_heads)
+        serialize(f, repeat_kv(wk))
         
-        # FFN Gate, Up, Down (Notice the dimensions match your C++ swap!)
-        serialize(f, torch.randn(hidden_dim, dim))
-        serialize(f, torch.randn(hidden_dim, dim))
-        serialize(f, torch.randn(dim, hidden_dim))
+    # 5. Wv (No RoPE here, just repeat for GQA)
+    for i in range(num_layers):
+        wv = state_dict[f"model.layers.{i}.self_attn.v_proj.weight"]
+        serialize(f, repeat_kv(wv))
         
-    # 3. Final Norm
-    serialize(f, torch.ones(dim))
+    # 6. Wo 
+    for i in range(num_layers):
+        serialize(f, state_dict[f"model.layers.{i}.self_attn.o_proj.weight"])
+        
+    # 7. FFN Norms 
+    for i in range(num_layers):
+        serialize(f, state_dict[f"model.layers.{i}.post_attention_layernorm.weight"])
+        
+    # 8. FFN Gate (w1) 
+    for i in range(num_layers):
+        serialize(f, state_dict[f"model.layers.{i}.mlp.gate_proj.weight"])
+        
+    # 9. FFN Down (w2) 
+    for i in range(num_layers):
+        serialize(f, state_dict[f"model.layers.{i}.mlp.down_proj.weight"])
+        
+    # 10. FFN Up (w3) 
+    for i in range(num_layers):
+        serialize(f, state_dict[f"model.layers.{i}.mlp.up_proj.weight"])
+        
+    # 11. Final Norm
+    serialize(f, state_dict["model.norm.weight"])
     
-    # 4. Output Classifier
-    serialize(f, torch.randn(vocab_size, dim))
+    # 12. Output Classifier
+    serialize(f, state_dict["lm_head.weight"])
 
-print("✅ Successfully exported raw weights to model.bin!")
+print("✅ Successfully exported structurally sound binary!")
