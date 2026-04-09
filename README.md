@@ -6,7 +6,12 @@
 ![Build](https://img.shields.io/badge/build-CMake-green.svg)
 ![Platform](https://img.shields.io/badge/Platform-Apple%20Silicon%20%7C%20ARM-lightgrey.svg)
 
+## Demo
+<img width="951" height="902" alt="arm-llm demo" src="https://github.com/user-attachments/assets/f280a002-bc4a-430b-ad22-6f865ece9861" />
+
 ## Features & Architecture
+
+<img width="1243" height="749" alt="arm-llm arch" src="https://github.com/user-attachments/assets/7751310a-3ffb-45f5-a268-99bed3ad8fc0" />
 
 This project was built from the ground up to understand the low-level details of Large Language Models. 
 
