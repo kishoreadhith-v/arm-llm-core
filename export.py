@@ -92,4 +92,4 @@ with open(output_file, "wb") as f:
     # 12. Output Classifier
     serialize(f, state_dict["lm_head.weight"])
 
-print("✅ Successfully exported structurally sound binary!")
+print("[*] Successfully exported structurally sound binary!")

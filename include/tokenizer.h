@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include "utils.h"
 
 struct Tokenizer
@@ -85,7 +86,30 @@ struct Tokenizer
 
     void print_word(int token_id)
     {
-        std::cout << vocab[token_id];
-        std::flush(std::cout); // Force it to print immediately without waiting for a newline
+        const char *word = vocab[token_id];
+
+        if(std::strcmp(word, "<0x0A>") == 0)
+        {
+            std::cout << '\n';
+        }
+        else if (std::strcmp(word, "<0x09>") == 0)
+        {
+            std::cout << '\t';
+        }
+        else if (std::strcmp(word, "<0x20>") == 0)
+        {
+            std::cout << ' ';
+        }
+        else if (std::strcmp(word, "<s>") == 0 || std::strcmp(word, "</s>") == 0)
+        {
+            // drop control tokens
+        }
+        else
+        {
+            // Print normal words
+            std::cout << word;
+        }
+
+        std::flush(std::cout);
     }
 };

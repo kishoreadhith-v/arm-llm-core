@@ -99,10 +99,10 @@ int main()
     // Skip the 256-byte header/ metadata
     float *weights_ptr = loader.get_data();
     model.load_weights(weights_ptr);
-    std::cout << "✅ Model routed safely." << std::endl;
+    std::cout << "[*] Model routed safely." << std::endl;
 
     Tokenizer tokenizer("../tokenizer.bin", vocab_size);
-    std::cout << "✅ Tokenizer loaded safely." << std::endl;
+    std::cout << "[*] Tokenizer loaded safely." << std::endl;
 
     Tensor logits(new float[vocab_size](), vocab_size, 1);
 
@@ -111,10 +111,7 @@ int main()
     std::vector<int> prompt_tokens = {1, 529, 29989, 5205, 29989, 29958, 13, 3492, 526, 263, 8444, 14137, 319, 29902, 29889, 2, 13, 29966, 29989, 1792, 29989, 29958, 13, 6113, 263, 2560, 4544, 1813, 5934, 15043, 2787, 29901, 2, 13, 29966, 29989, 465, 22137, 29989, 29958, 13, 28956, 1420, 13, 29966, 29991, 21300, 3472, 29958, 13, 29966, 1420, 29958, 13, 29966, 2813, 29958, 13};
     int pos = 0;
 
-    std::cout << "Prompt: ```html\n<!DOCTYPE html>\n<html>\n<head>\n";
-
-    // 1. Ingest the prompt to build the KV Cache Context
-    // We stop 1 token early so we can use the final token to kick off generation
+        // We stop 1 token early so we can use the final token to kick off generation
     std::cout << "Ingesting prompt...\n";
     for (size_t i = 0; i < prompt_tokens.size() - 1; i++)
     {
@@ -124,12 +121,18 @@ int main()
         pos++;
     }
     std::cout << "\n";
+    // log the prompt used
+    std::cout << "\nPrompt:\n";
+    std::cout << "<|system|>\nYou are a helpful coding AI.</s>\n";
+    std::cout << "<|user|>\nWrite a simple HTML page saying Hello World:</s>\n";
+    std::cout << "<|assistant|>\n```html\n<!DOCTYPE html>\n<html>\n<head>\n";
 
     int next_token = prompt_tokens.back(); // Token 3694 (" named")
     float temperature = 0.2f;              // Back to 0.8! With a prompt, the model is confident enough for creativity.
     int EOS_TOKEN = 2;
 
-    std::cout << "\nGenerating HTML:\n\n";
+    // set terminal o/p green for ai
+    std::cout << "\033[1;32m";
 
     while (pos < 800)
     {
@@ -156,6 +159,9 @@ int main()
         std::cout << std::flush;
         pos += 1;
     }
+
+    // reset terminal color
+    std::cout << "\033[0m";
 
     std::cout << "\n"
               << "Generation complete: \n";

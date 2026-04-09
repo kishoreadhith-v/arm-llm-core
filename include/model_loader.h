@@ -37,8 +37,8 @@ public:
         // ==========================================
         data = (float *) mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
         CHECK(data != MAP_FAILED, "Failed to memory map file.");
-        
-        std::cout << "✅ Successfully mapped " << filepath << "\n";
+
+        std::cout << "[*] Successfully mapped " << filepath << "\n";
     }
 
     // DESTRUCTOR: Runs automatically when the object is destroyed
@@ -52,7 +52,7 @@ public:
         munmap(data, file_size);
 
         close(fd);
-        std::cout << "🧹 Memory safely cleaned up.\n";
+        std::cout << "Model Memory safely cleaned up.\n";
     }
 
     // A simple getter function so our main.cpp can access the pointer

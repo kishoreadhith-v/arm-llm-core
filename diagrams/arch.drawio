@@ -1,0 +1,116 @@
+<mxfile host="app.diagrams.net" modified="2024-04-09T00:00:00.000Z" agent="Mozilla/5.0" version="24.2.1">
+  <diagram name="Arm-LLM-Core" id="engine_arch_1">
+    <mxGraphModel dx="1422" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" background="#121212" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <mxCell id="disk_w" value="tinyllama_1B.bin&lt;br&gt;&lt;b&gt;(4.5GB Raw Float32 Weights)&lt;/b&gt;" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#1e1e1e;strokeColor=#00B0FF;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="disk_t" value="tokenizer.bin&lt;br&gt;&lt;b&gt;(SentencePiece Vocab)&lt;/b&gt;" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#1e1e1e;strokeColor=#00B0FF;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="720" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="loader" value="ModelLoader&lt;br&gt;(mmap file mapping)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#00E676;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="260" y="90" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="llama" value="LLaMa Struct&lt;br&gt;(Hydrates Tensors)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#00E676;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="440" y="90" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="layer_box" value="Transformer Layer (x22)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#555555;fontColor=#aaaaaa;strokeWidth=2;dashed=1;verticalAlign=top;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="620" y="40" width="340" height="640" as="geometry" />
+        </mxCell>
+
+        <mxCell id="embed" value="tok_embeddings Lookup" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#FF3D00;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="670" y="80" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="norm1" value="RMSNorm" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#FF3D00;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="670" y="160" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="attn" value="AttentionBlock&lt;br&gt;(QKV, RoPE, Softmax)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#FF3D00;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="670" y="240" width="140" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="kv" value="KVCache Struct&lt;br&gt;(Context State)" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#1e1e1e;strokeColor=#00B0FF;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="840" y="240" width="90" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="add1" value="Residual Add" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#FF3D00;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="670" y="360" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="norm2" value="RMSNorm" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#FF3D00;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="670" y="440" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ffn" value="FeedForwardBlock&lt;br&gt;(Gate, SiLU, Up, Down)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#FF3D00;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="670" y="520" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="add2" value="Residual Add" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#FF3D00;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="670" y="620" width="240" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="out_norm" value="Final RMSNorm" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#FF3D00;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="80" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="classifier" value="Output Classifier&lt;br&gt;(Logits Projection)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#FF3D00;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="160" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="sampler" value="Sampler&lt;br&gt;(Argmax / Temp)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#00E676;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="260" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="tokenizer" value="Tokenizer.print_word&lt;br&gt;(Stdout)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1e1e;strokeColor=#00E676;fontColor=#ffffff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="600" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_w_load" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="disk_w" target="loader">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_load_llm" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="loader" target="llama">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_llm_emb" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="llama" target="embed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_emb_n1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="embed" target="norm1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_n1_attn" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="norm1" target="attn">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_attn_kv" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#00B0FF;strokeWidth=2;startArrow=classic;endArrow=classic;" edge="1" parent="1" source="attn" target="kv">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_attn_add1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="attn" target="add1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_add1_n2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="add1" target="norm2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_n2_ffn" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="norm2" target="ffn">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ffn_add2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="ffn" target="add2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="e_add2_out" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="add2" target="out_norm">
+          <mxGeometry relative="1" as="geometry">
+             <Array as="points">
+              <mxPoint x="980" y="640" />
+              <mxPoint x="980" y="100" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_out_class" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="out_norm" target="classifier">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_class_samp" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="classifier" target="sampler">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_samp_tok" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="sampler" target="tokenizer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_tbin_tok" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="disk_t" target="tokenizer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_skip1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#888888;strokeWidth=2;dashed=1;" edge="1" parent="
