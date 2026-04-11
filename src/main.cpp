@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <cmath>
+#include <chrono>
 #include "transformer.h"
 #include "kvcache.h"
 #include "model_loader.h"
@@ -111,16 +112,25 @@ int main()
     std::vector<int> prompt_tokens = {1, 529, 29989, 5205, 29989, 29958, 13, 3492, 526, 263, 8444, 14137, 319, 29902, 29889, 2, 13, 29966, 29989, 1792, 29989, 29958, 13, 6113, 263, 2560, 4544, 1813, 5934, 15043, 2787, 29901, 2, 13, 29966, 29989, 465, 22137, 29989, 29958, 13, 28956, 1420, 13, 29966, 29991, 21300, 3472, 29958, 13, 29966, 1420, 29958, 13, 29966, 2813, 29958, 13};
     int pos = 0;
 
-        // We stop 1 token early so we can use the final token to kick off generation
+    // We stop 1 token early so we can use the final token to kick off generation
     std::cout << "Ingesting prompt...\n";
+
+    // start prefill timing
+    auto start_prefill = std::chrono::high_resolution_clock::now();
+
     for (size_t i = 0; i < prompt_tokens.size() - 1; i++)
     {
-        std::cout << "\rProcessing token " << (i + 1) << " of " << (prompt_tokens.size() - 1) << std::flush;
+        // std::cout << "\rProcessing token " << (i + 1) << " of " << (prompt_tokens.size() - 1) << std::flush;
         std::memset(logits.data, 0, vocab_size * sizeof(float));
         model.forward(prompt_tokens[i], pos, logits);
         pos++;
     }
-    std::cout << "\n";
+
+    // end prefill timing
+    auto end_prefill = std::chrono::high_resolution_clock::now();
+    double prefill_ms = std::chrono::duration<double, std::milli>(end_prefill - start_prefill).count();
+
+    std::cout << "Prefill complete\n";
     // log the prompt used
     std::cout << "\nPrompt:\n";
     std::cout << "<|system|>\nYou are a helpful coding AI.</s>\n";
@@ -133,6 +143,10 @@ int main()
 
     // set terminal o/p green for ai
     std::cout << "\033[1;32m";
+
+    // start decode timing
+    auto start_decode = std::chrono::high_resolution_clock::now();
+    int generated_tokens = 0;
 
     while (pos < 800)
     {
@@ -158,13 +172,23 @@ int main()
         tokenizer.print_word(next_token);
         std::cout << std::flush;
         pos += 1;
+        generated_tokens++;
     }
+
+    // end decode timing
+    auto end_decode = std::chrono::high_resolution_clock::now();
+    double decode_ms = std::chrono::duration<double, std::milli>(end_decode - start_decode).count();
 
     // reset terminal color
     std::cout << "\033[0m";
 
     std::cout << "\n"
               << "Generation complete: \n";
+
+    std::cout << "\n--- Performance Metrics ---\n";
+    std::cout << "Time To First Token (Prefill): " << prefill_ms << " ms\n";
+    std::cout << "Decode Speed: " << (generated_tokens / (decode_ms / 1000.0)) << " tok/s\n";
+    std::cout << "---------------------------\n";
 
     delete[] logits.data;
     delete[] model.layers;
