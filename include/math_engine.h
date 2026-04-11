@@ -23,7 +23,8 @@ inline void matmul_forward(Tensor &y, const Tensor &x, const Tensor &W)
     CHECK(W.rows == y.rows, "Matrix - Output shape mismatch - W.cols must be equal to y.rows");
 
     std::memset(y.data, 0, y.rows * y.cols * sizeof(float));
-    
+
+#pragma omp parallel for
     for (int i = 0; i < W.rows; i++)
     {
         float32x4_t vec_sum = vdupq_n_f32(0.0f);
